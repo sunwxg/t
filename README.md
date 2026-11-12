@@ -19,7 +19,6 @@ $ evaluate_submission_process.sh SLE-15-SP3 gdm
 GNOME:STABLE:3.34 
 
  -> SUSE:SLE-15-SP2:Update 
- 
 
 > Likewise, the command below tells the order to sumit SUSE:SLE-15-SP1:Update/flatpak:
 > 
@@ -62,10 +61,10 @@ Devel:Desktop:SLE-15-SP1
 
 $ evaluate_submission_process.sh SLE-15-SP4 gdm
 
-Warning: Differences detected for package gdm between GNOME:STABLE:41 and SUSE:SLE-15-SP4:Update.
-
-Do you want to review the differences? (y/N): y
-
 GNOME:STABLE:41
 
  -> SUSE:SLE-15-SP4:Update
+
+Warning: Differences detected for package gdm between GNOME:STABLE:41 and SUSE:SLE-15-SP4:Update.
+
+Do you want to review the differences? (y/N): y
