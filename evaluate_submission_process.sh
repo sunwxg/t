@@ -178,17 +178,19 @@ if test -z "$devel_project"; then
     exit 0;
 fi
 
+# Output the process
+echo -e "$devel_project \n -> $target_project $3\n"
+
 # Compare $devel_project and $target_project, warning when there is a difference
 
 osc_api_flag=""
-osc_opensuse_flag=""
 if [[ "$devel_project" == *Devel:Desktop* ]]; then
     osc_api_flag='-A "https://api.suse.de"'
-    osc_opensuse_flag="openSUSE.org:"
 fi
 
-diff_output=$(eval osc $osc_api_flag rdiff "$osc_opensuse_flag$devel_project" "$pkg" "$target_project" "$pkg" 2>&1)
+diff_output=$(eval osc $osc_api_flag rdiff "$devel_project" "$pkg" "$target_project" "$pkg" 2>&1)
 
+# No difference, exit
 [ -z "$diff_output" ] && exit 0
 
 echo "Warning: Differences detected for package $pkg between $devel_project and $target_project."
@@ -204,7 +206,3 @@ case "$choice" in
         echo
         ;;
 esac
-
-# Output the process
-
-echo -e "$devel_project \n -> $target_project $3\n"
