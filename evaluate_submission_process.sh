@@ -179,7 +179,11 @@ if test -z "$devel_project"; then
 fi
 
 # Output the process
-echo -e "$devel_project \n -> $target_project $3\n"
+if [[ "$target_project" == *SUSE:SLFO* ]]; then
+    echo -e "$devel_project \n -> $target_project (git) $3\n"
+else
+    echo -e "$devel_project \n -> $target_project $3\n"
+fi
 
 # Compare $devel_project and $target_project, warning when there is a difference
 
