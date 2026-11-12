@@ -97,7 +97,8 @@ case "$prj" in
         ;;
 esac
 
-# Probe the package status in one or two development projects to get the correct $devel_project
+# Probe the package status in one or two valid development projects
+# (GNOME:STABLE, Devel:Desktop) to get the correct $devel_project
 
 devel_project=""
 
@@ -125,7 +126,7 @@ _probe() {
     fi
 }
 
-# Infer $devel_project from the $target_project
+# Infer a correct $devel_project from a $target_project
 
 target_project=$(osc meta pkg $prj $pkg | head -1 | grep -oP 'project="\K[^"]+')
 target_project=${target_project/GA/Update}
