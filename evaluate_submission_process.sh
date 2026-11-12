@@ -10,9 +10,9 @@
 # SLE15SP5 SUSE:SLE-15-SP5:Update GNOME:STABLE:41 Devel:Desktop:SLE-15-SP5
 # SLE15SP4 SUSE:SLE-15-SP4:Update GNOME:STABLE:41 None
 # SLE15SP3 SUSE:SLE-15-SP3:Update GNOME:STABLE:3.34 Devel:Desktop:SLE-15-SP3
-# SLE15SP2 SUSE:SLE-15-SP2:Update GNOME:STABLE:3.34 Devel:Desktop:SLE-15-SP2
+# SLE15SP2 SUSE:SLE-15-SP2:Update GNOME:STABLE:3.34 (?Devel:Desktop:SLE-15-SP2)
 # SLE15SP1 SUSE:SLE-15-SP1:Update GNOME:STABLE:3.26 Devel:Desktop:SLE-15-SP1
-# SLE15SP0 SUSE:SLE-15:Update     GNOME:STABLE:3.26 Devel:Desktop:SLE-15
+# SLE15SP0 SUSE:SLE-15:Update     GNOME:STABLE:3.26 (?Devel:Desktop:SLE-15)
 # SLE12SP5 SUSE:SLE-12-SP5:Update 
 ### STATIC MAP END ###
 
@@ -30,7 +30,7 @@
 # brise
 # 
 # Sync from Devel:Desktop:SLE-15 to G:S:3.26:
-# appstream-glib
+# appstream-glib (done)
 # NetworkManager (done)
 #
 # Remove directly in Devel:Desktop:SLE-15 (either identical, or GNOME:STABLE:3.26 is incrementally ahead)
@@ -54,6 +54,8 @@
 
 prj=$1
 pkg=$2
+
+# Normalize $prj input
 
 case "$prj" in
     SLE-16.0|SUSE:SLFO:1.2)
@@ -95,8 +97,9 @@ case "$prj" in
         ;;
 esac
 
+# Probe the package status in one or two development projects to get the correct $devel_project
+
 devel_project=""
-target_project=$(osc meta pkg $prj $pkg | head -1 | grep -oP 'project="\K[^"]+')
 
 _probe() {
     local pkg="$1"
@@ -121,6 +124,11 @@ _probe() {
         fi
     fi
 }
+
+# Infer $devel_project from the $target_project
+
+target_project=$(osc meta pkg $prj $pkg | head -1 | grep -oP 'project="\K[^"]+')
+target_project=${target_project/GA/Update}
 
 case "$target_project" in
     SUSE:SLFO:1.2)
@@ -162,10 +170,40 @@ case "$target_project" in
         ;;
 esac
 
-# Echo the submission nodes and proecess
+# Rough handling the package outside the devel projects
 
 if test -z "$devel_project"; then
-    echo "$3 NOT in Devel:Desktop or GNOME:STABLE, direct submission to:";
+    echo "$3 NOT in Devel:Desktop or GNOME:STABLE, direct submission to: $target_project";
+    exit 0;
 fi
 
-echo -e "$devel_project \n -> ${target_project/GA/Update} $3\n"
+# Compare $devel_project and $target_project, warning when there is a difference
+
+osc_api_flag=""
+osc_opensuse_flag=""
+if [[ "$devel_project" == *Devel:Desktop* ]]; then
+    osc_api_flag='-A "https://api.suse.de"'
+    osc_opensuse_flag="openSUSE.org:"
+fi
+
+diff_output=$(eval osc $osc_api_flag rdiff "$osc_opensuse_flag$devel_project" "$pkg" "$target_project" "$pkg" 2>&1)
+
+[ -z "$diff_output" ] && exit 0
+
+echo "Warning: Differences detected for package $pkg between $devel_project and $target_project."
+read -r -p "Do you want to review the differences? (y/N): " choice
+
+case "$choice" in
+    [yY][eS]|[yY])
+        # Huh, must use double quotes here so newlines and spacing are preserved
+        echo "$diff_output" | less -R
+        ;;
+    *)
+        echo "Skipping review."
+        echo
+        ;;
+esac
+
+# Output the process
+
+echo -e "$devel_project \n -> $target_project $3\n"
