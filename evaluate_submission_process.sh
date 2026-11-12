@@ -58,7 +58,7 @@ pkg=$2
 # Normalize $prj input
 
 case "$prj" in
-    SLE-16.0|SUSE:SLFO:1.2)
+    SLE-16|SLE-16.0|SUSE:SLFO:1.2)
         prj="SUSE:SLFO:1.2"
         ;;
     SLE-16.1|SUSE:SLFO:1.3)
