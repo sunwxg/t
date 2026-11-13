@@ -17,9 +17,8 @@
 ### STATIC MAP END ###
 
 # TODO
-# 1. standalone package search (all dev projects of a package)
-# 2. notify already broken sync
-# 3. use static database
+# 1. notify already broken sync
+# 2. use static database
 #
 # Check correctness of Devel and G:S
 # 
@@ -52,50 +51,76 @@
 # PackageKit
 
 
-prj=$1
-pkg=$2
+# Release label and the project used to look up the package
+release_projects=(
+    "SLE-16.2|SUSE:SLFO:Main"
+    "SLE-16.1|SUSE:SLFO:1.3"
+    "SLE-16.0|SUSE:SLFO:1.2"
+    "SLE-15-SP7|SUSE:SLE-15-SP7:Update"
+    "SLE-15-SP6|SUSE:SLE-15-SP6:Update"
+    "SLE-15-SP5|SUSE:SLE-15-SP5:Update"
+    "SLE-15-SP4|SUSE:SLE-15-SP4:Update"
+    "SLE-15-SP3|SUSE:SLE-15-SP3:Update"
+    "SLE-15-SP2|SUSE:SLE-15-SP2:Update"
+    "SLE-15-SP1|SUSE:SLE-15-SP1:Update"
+    "SLE-15|SUSE:SLE-15:Update"
+    "SLE-12-SP5|SUSE:SLE-12-SP5:Update"
+)
 
-# Normalize $prj input
+# Probe the devel project for a target project
+_probe_target_project() {
+    local pkg="$1"
+    local target_project="$2"
 
-case "$prj" in
-    SLE-16|SLE-16.0|SUSE:SLFO:1.2)
-        prj="SUSE:SLFO:1.2"
-        ;;
-    SLE-16.1|SUSE:SLFO:1.3)
-        prj="SUSE:SLFO:1.3"
-        ;;
-    SLE-16.2|SUSE:SLFO:Main)
-        prj="SUSE:SLFO:Main"
-        ;;
-    SLE-15|SUSE:SLE-15:GA|SUSE:SLE-15:Update)
-        prj="SUSE:SLE-15:Update"
-        ;;
-    SLE-15-SP1|SUSE:SLE-15-SP1:GA|SUSE:SLE-15-SP1:Update)
-        prj="SUSE:SLE-15-SP1:Update"
-        ;;
-    SLE-15-SP2|SUSE:SLE-15-SP2:GA|SUSE:SLE-15-SP2:Update)
-        prj="SUSE:SLE-15-SP2:Update"
-        ;;
-    SLE-15-SP3|SUSE:SLE-15-SP3:GA|SUSE:SLE-15-SP3:Update)
-        prj="SUSE:SLE-15-SP3:Update"
-        ;;
-    SLE-15-SP4|SUSE:SLE-15-SP4:GA|SUSE:SLE-15-SP4:Update)
-        prj="SUSE:SLE-15-SP4:Update"
-        ;;
-    SLE-15-SP5|SUSE:SLE-15-SP5:GA|SUSE:SLE-15-SP5:Update)
-        prj="SUSE:SLE-15-SP5:Update"
-        ;;
-    SLE-15-SP6|SUSE:SLE-15-SP6:GA|SUSE:SLE-15-SP6:Update)
-        prj="SUSE:SLE-15-SP6:Update"
-        ;;
-    SLE-15-SP7|SUSE:SLE-15-SP7:GA|SUSE:SLE-15-SP7:Update)
-        prj="SUSE:SLE-15-SP7:Update"
-        ;;
-    *)
-        echo "Unhandled project: $prj" >&2
-        exit 1
-        ;;
-esac
+    devel_project=""
+
+    case "$target_project" in
+        SUSE:SLFO:1.2)
+            _probe "$pkg" GNOME:STABLE:48
+            ;;
+        SUSE:SLFO:1.3)
+            _probe "$pkg" GNOME:STABLE:48
+            ;;
+        SUSE:SLFO:Main)
+            _probe "$pkg" GNOME:Factory
+            ;;
+        SUSE:SLE-15:Update|SUSE:SLE-15:GA)
+            _probe "$pkg" GNOME:STABLE:3.26
+            ;;
+        SUSE:SLE-15-SP1:Update|SUSE:SLE-15-SP1:GA)
+            _probe "$pkg" GNOME:STABLE:3.26 Devel:Desktop:SLE-15-SP1
+            ;;
+        SUSE:SLE-15-SP2:Update|SUSE:SLE-15-SP2:GA)
+            _probe "$pkg" GNOME:STABLE:3.34
+            ;;
+        SUSE:SLE-15-SP3:Update|SUSE:SLE-15-SP3:GA)
+            _probe "$pkg" GNOME:STABLE:3.34 Devel:Desktop:SLE-15-SP3
+            ;;
+        SUSE:SLE-15-SP4:Update|SUSE:SLE-15-SP4:GA)
+            _probe "$pkg" GNOME:STABLE:41
+            ;;
+        SUSE:SLE-15-SP5:Update|SUSE:SLE-15-SP5:GA)
+            _probe "$pkg" GNOME:STABLE:41 Devel:Desktop:SLE-15-SP5
+            ;;
+        SUSE:SLE-15-SP6:Update|SUSE:SLE-15-SP6:GA)
+            _probe "$pkg" GNOME:STABLE:45
+            ;;
+        SUSE:SLE-15-SP7:Update|SUSE:SLE-15-SP7:GA)
+            _probe "$pkg" GNOME:STABLE:45 Devel:Desktop:SLE-15-SP7
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Resolve the package's current target project (following inheritance)
+_resolve_target_project() {
+    local prj="$1"
+    local pkg="$2"
+
+    osc meta pkg "$prj" "$pkg" 2>/dev/null | head -1 | grep -oP 'project="\K[^"]+'
+}
 
 # Probe the package status in one or two valid development projects
 # (GNOME:STABLE, Devel:Desktop) to get the correct $devel_project
@@ -126,63 +151,118 @@ _probe() {
     fi
 }
 
+# Show the target and devel projects for the given package
+# Usage: show_devel_projects <package>
+
+show_devel_projects() {
+    local pkg="$1"
+    local entry label base target
+    local found=""
+
+    for entry in "${release_projects[@]}"; do
+        label=${entry%%|*}
+        base=${entry#*|}
+
+        target=$(_resolve_target_project "$base" "$pkg")
+        [ -z "$target" ] && continue
+        target=${target/GA/Update}
+
+        _probe_target_project "$pkg" "$target" || continue
+        if [ -n "$devel_project" ]; then
+            echo "$label: $target -> $devel_project"
+            found=1
+        fi
+    done
+
+    if [ -z "$found" ]; then
+        echo "Package $pkg not found in any devel project" >&2
+    fi
+}
+
+usage() {
+    echo "Usage: $0 <project> <package>" >&2
+    echo "       $0 <package>" >&2
+    exit 1
+}
+
+if [ $# -eq 1 ]; then
+    pkg=$1
+elif [ $# -eq 2 ]; then
+    prj=$1
+    pkg=$2
+
+    # Normalize $prj input
+
+    case "$prj" in
+        SLE-16|SLE-16.0|SUSE:SLFO:1.2)
+            prj="SUSE:SLFO:1.2"
+            ;;
+        SLE-16.1|SUSE:SLFO:1.3)
+            prj="SUSE:SLFO:1.3"
+            ;;
+        SLE-16.2|SUSE:SLFO:Main)
+            prj="SUSE:SLFO:Main"
+            ;;
+        SLE-15|SUSE:SLE-15:GA|SUSE:SLE-15:Update)
+            prj="SUSE:SLE-15:Update"
+            ;;
+        SLE-15-SP1|SUSE:SLE-15-SP1:GA|SUSE:SLE-15-SP1:Update)
+            prj="SUSE:SLE-15-SP1:Update"
+            ;;
+        SLE-15-SP2|SUSE:SLE-15-SP2:GA|SUSE:SLE-15-SP2:Update)
+            prj="SUSE:SLE-15-SP2:Update"
+            ;;
+        SLE-15-SP3|SUSE:SLE-15-SP3:GA|SUSE:SLE-15-SP3:Update)
+            prj="SUSE:SLE-15-SP3:Update"
+            ;;
+        SLE-15-SP4|SUSE:SLE-15-SP4:GA|SUSE:SLE-15-SP4:Update)
+            prj="SUSE:SLE-15-SP4:Update"
+            ;;
+        SLE-15-SP5|SUSE:SLE-15-SP5:GA|SUSE:SLE-15-SP5:Update)
+            prj="SUSE:SLE-15-SP5:Update"
+            ;;
+        SLE-15-SP6|SUSE:SLE-15-SP6:GA|SUSE:SLE-15-SP6:Update)
+            prj="SUSE:SLE-15-SP6:Update"
+            ;;
+        SLE-15-SP7|SUSE:SLE-15-SP7:GA|SUSE:SLE-15-SP7:Update)
+            prj="SUSE:SLE-15-SP7:Update"
+            ;;
+        *)
+            echo "Unhandled project: $prj" >&2
+            exit 1
+            ;;
+    esac
+else
+    usage
+fi
+
+if [ $# -eq 1 ]; then
+    show_devel_projects "$pkg"
+    exit 0
+fi
+
 # Infer a correct $devel_project from a $target_project
 
 target_project=$(osc meta pkg $prj $pkg | head -1 | grep -oP 'project="\K[^"]+')
 target_project=${target_project/GA/Update}
 
-case "$target_project" in
-    SUSE:SLFO:1.2)
-        _probe $pkg GNOME:STABLE:48
-        ;;
-    SUSE:SLFO:1.3)
-        _probe $pkg GNOME:STABLE:48
-        ;;
-    SUSE:SLFO:Main)
-        _probe $pkg GNOME:Factory
-        ;;
-    SUSE:SLE-15:Update|SUSE:SLE-15:GA)
-        _probe $pkg GNOME:STABLE:3.26
-        ;;
-    SUSE:SLE-15-SP1:Update|SUSE:SLE-15-SP1:GA)
-        _probe $pkg GNOME:STABLE:3.26 Devel:Desktop:SLE-15-SP1
-        ;;
-    SUSE:SLE-15-SP2:Update|SUSE:SLE-15-SP2:GA)
-        _probe $pkg GNOME:STABLE:3.34
-        ;;
-    SUSE:SLE-15-SP3:Update|SUSE:SLE-15-SP3:GA)
-        _probe $pkg GNOME:STABLE:3.34 Devel:Desktop:SLE-15-SP3
-        ;;
-    SUSE:SLE-15-SP4:Update|SUSE:SLE-15-SP4:GA)
-        _probe $pkg GNOME:STABLE:41
-        ;;
-    SUSE:SLE-15-SP5:Update|SUSE:SLE-15-SP5:GA)
-        _probe $pkg GNOME:STABLE:41 Devel:Desktop:SLE-15-SP5
-        ;;
-    SUSE:SLE-15-SP6:Update|SUSE:SLE-15-SP6:GA)
-        _probe $pkg GNOME:STABLE:45
-        ;;
-    SUSE:SLE-15-SP7:Update|SUSE:SLE-15-SP7:GA)
-        _probe $pkg GNOME:STABLE:45 Devel:Desktop:SLE-15-SP7
-        ;;
-    *)
-        echo "Target project not found" >&2
-        exit 1;
-        ;;
-esac
+if ! _probe_target_project "$pkg" "$target_project"; then
+    echo "Target project not found" >&2
+    exit 1
+fi
 
 # Rough handling the package outside the devel projects
 
 if test -z "$devel_project"; then
-    echo "$3 NOT in Devel:Desktop or GNOME:STABLE, direct submission to: $target_project";
+    echo "$pkg NOT in Devel:Desktop or GNOME:STABLE, direct submission to: $target_project";
     exit 0;
 fi
 
 # Output the process
 if [[ "$target_project" == *SUSE:SLFO* ]]; then
-    echo -e "$devel_project \n -> $target_project (git) $3\n"
+    echo -e "$devel_project \n -> $target_project (git) $pkg\n"
 else
-    echo -e "$devel_project \n -> $target_project $3\n"
+    echo -e "$devel_project \n -> $target_project $pkg\n"
 fi
 
 # Compare $devel_project and $target_project, warning when there is a difference
